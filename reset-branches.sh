@@ -25,6 +25,10 @@ echo "🛠  Preparing to reset the following branches to commit: $COMMIT"
 printf '   - %s\n' "${BRANCHES[@]}"
 echo
 
+# Step 1: Fetch the latest state from origin
+echo "🔍 Fetching the latest changes from origin..."
+git fetch origin --prune
+
 # Confirm with user
 read -p "⚠️  This will rewrite history on remote branches. Continue? (y/N): " confirm
 if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
@@ -32,18 +36,24 @@ if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
   exit 0
 fi
 
-# Backup branches first
+# Step 2: Create local backups before making destructive changes
 for BR in "${BRANCHES[@]}"; do
   BACKUP="backup-${BR}-$(date +%Y%m%d-%H%M%S)"
   echo "📦 Creating backup branch: $BACKUP"
-  git branch "$BACKUP" "$BR"
+  git branch "$BACKUP" "$BR" || {
+    echo "⚠️  Warning: Could not create backup for branch '$BR'. It may not exist locally."
+  }
 done
 
-# Reset and push each branch
+# Step 3: Reset and force push each branch
 for BR in "${BRANCHES[@]}"; do
   echo
   echo "🔄 Resetting branch '$BR' to commit '$COMMIT'..."
-  git checkout "$BR"
+  git checkout "$BR" 2>/dev/null || {
+    echo "🌱 Branch '$BR' not found locally. Creating it..."
+    git checkout -b "$BR" "origin/$BR" || git checkout -b "$BR"
+  }
+
   git reset --hard "$COMMIT"
 
   echo "☁️  Pushing branch '$BR' to origin (force-with-lease)..."
@@ -51,5 +61,5 @@ for BR in "${BRANCHES[@]}"; do
 done
 
 echo
-echo "✅ Done! All branches have been reset and pushed."
-echo "🪄 Backup branches created in case you need to restore."
+echo "✅ Done! All specified branches have been reset and pushed to origin."
+echo "🪄 Backup branches were created locally in case you need to restore."
